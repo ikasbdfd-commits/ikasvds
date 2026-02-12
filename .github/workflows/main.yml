@@ -1,4 +1,4 @@
-name: Windows RDP İkasVDS
+name: Windows RDP Ngrok İkasVDS
 
 on:
   workflow_dispatch:
@@ -24,10 +24,7 @@ jobs:
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Install Firefox
-      run: choco install firefox -y
-
-    - name: Dark Mode
+    - name: Set Dark Mode
       run: |
         reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v AppsUseLightTheme /t REG_DWORD /d 0 /f
         reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
@@ -37,48 +34,38 @@ jobs:
         $source = "$env:GITHUB_WORKSPACE\ikadvds.png"
         $dest = "$env:USERPROFILE\ikadvds.png"
 
-        Write-Host "Looking for wallpaper at: $source"
-
         if (Test-Path $source) {
             Copy-Item $source $dest -Force
             reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $dest /f
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-            Write-Host "Wallpaper applied successfully."
+            Write-Host "Wallpaper applied."
         } else {
             Write-Host "Wallpaper file NOT found!"
-            Get-ChildItem $env:GITHUB_WORKSPACE
         }
 
-    - name: Install Tailscale
+    - name: Install Ngrok
       run: |
-        choco install tailscale -y
-        $ts = "C:\Program Files\Tailscale\tailscale.exe"
-        if (!(Test-Path $ts)) {
-          $ts = "C:\Program Files (x86)\Tailscale\tailscale.exe"
-        }
-        echo "TS_PATH=$ts" >> $env:GITHUB_ENV
+        choco install ngrok -y
 
-    - name: Start Tailscale (URL Login)
+    - name: Configure Ngrok
       run: |
-        & "$env:TS_PATH" up
+        ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Wait & Show RDP Info
+    - name: Start Ngrok Tunnel
       run: |
-        Write-Host "Authorize device using URL above."
-        Write-Host "Waiting for Tailscale IP..."
+        Start-Process -NoNewWindow -FilePath "ngrok.exe" -ArgumentList "tcp 3389"
 
-        for ($i=0; $i -lt 60; $i++) {
-          $ip = & "$env:TS_PATH" ip -4 2>$null
-          if ($ip) { break }
-          Start-Sleep -Seconds 5
-        }
+    - name: Get Ngrok TCP Address
+      run: |
+        Start-Sleep -Seconds 10
+        $resp = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
+        $tcp = $resp.tunnels | Where-Object { $_.proto -eq "tcp" }
+        $publicUrl = $tcp.public_url -replace "tcp://", ""
 
-        $ip = & "$env:TS_PATH" ip -4
-
-        Write-Host "==========================="
-        Write-Host "RDP IP: $ip"
+        Write-Host "=================================="
+        Write-Host "RDP Address: $publicUrl"
         Write-Host "Username: runneradmin"
         Write-Host "Password: $env:PASSWORD"
-        Write-Host "==========================="
+        Write-Host "=================================="
 
         Start-Sleep -Seconds 21600
