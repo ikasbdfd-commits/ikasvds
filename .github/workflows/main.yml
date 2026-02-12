@@ -10,6 +10,9 @@ jobs:
 
     steps:
 
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
     - name: Set Random Password
       run: |
         $pass = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 12 | ForEach-Object {[char]$_})
@@ -24,32 +27,40 @@ jobs:
     - name: Install Firefox
       run: choco install firefox -y
 
-    - name: Set Dark Mode
+    - name: Dark Mode
       run: |
         reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v AppsUseLightTheme /t REG_DWORD /d 0 /f
         reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
 
-    - name: Apply Custom Wallpaper
+    - name: Apply Wallpaper
       run: |
         $source = "$env:GITHUB_WORKSPACE\ikadvds.png"
         $dest = "$env:USERPROFILE\ikadvds.png"
+
+        Write-Host "Looking for wallpaper at: $source"
 
         if (Test-Path $source) {
             Copy-Item $source $dest -Force
             reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $dest /f
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-            Write-Host "Wallpaper applied."
+            Write-Host "Wallpaper applied successfully."
         } else {
-            Write-Host "Wallpaper file not found!"
+            Write-Host "Wallpaper file NOT found!"
+            Get-ChildItem $env:GITHUB_WORKSPACE
         }
 
     - name: Install Tailscale
-      run: choco install tailscale -y
+      run: |
+        choco install tailscale -y
+        $ts = "C:\Program Files\Tailscale\tailscale.exe"
+        if (!(Test-Path $ts)) {
+          $ts = "C:\Program Files (x86)\Tailscale\tailscale.exe"
+        }
+        echo "TS_PATH=$ts" >> $env:GITHUB_ENV
 
     - name: Start Tailscale (URL Login)
       run: |
-        Write-Host "Starting Tailscale..."
-        tailscale up
+        & "$env:TS_PATH" up
 
     - name: Wait & Show RDP Info
       run: |
@@ -57,12 +68,12 @@ jobs:
         Write-Host "Waiting for Tailscale IP..."
 
         for ($i=0; $i -lt 60; $i++) {
-          $ip = tailscale ip -4 2>$null
+          $ip = & "$env:TS_PATH" ip -4 2>$null
           if ($ip) { break }
           Start-Sleep -Seconds 5
         }
 
-        $ip = tailscale ip -4
+        $ip = & "$env:TS_PATH" ip -4
 
         Write-Host "==========================="
         Write-Host "RDP IP: $ip"
