@@ -33,32 +33,24 @@ jobs:
       run: |
         $source = "$env:GITHUB_WORKSPACE\ikadvds.png"
         $dest = "$env:USERPROFILE\ikadvds.png"
-
         if (Test-Path $source) {
             Copy-Item $source $dest -Force
             reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $dest /f
             RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-            Write-Host "Wallpaper applied."
-        } else {
-            Write-Host "Wallpaper file NOT found!"
         }
 
     - name: Install Ngrok
-      run: |
-        choco install ngrok -y
+      run: choco install ngrok -y
 
     - name: Configure Ngrok
-      run: |
-        ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+      run: ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
-    - name: Start Ngrok Tunnel
+    - name: Start Ngrok and Print Address
       run: |
-        Start-Process -NoNewWindow -FilePath "ngrok.exe" -ArgumentList "tcp 3389"
+        Start-Process cmd -ArgumentList "/c ngrok tcp 3389" -WindowStyle Hidden
+        Start-Sleep -Seconds 15
 
-    - name: Get Ngrok TCP Address
-      run: |
-        Start-Sleep -Seconds 10
-        $resp = Invoke-RestMethod http://127.0.0.1:4040/api/tunnels
+        $resp = Invoke-RestMethod "http://127.0.0.1:4040/api/tunnels"
         $tcp = $resp.tunnels | Where-Object { $_.proto -eq "tcp" }
         $publicUrl = $tcp.public_url -replace "tcp://", ""
 
