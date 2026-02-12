@@ -1,0 +1,73 @@
+name: Windows RDP İkasVDS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rdp:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+
+    - name: Set Random Password
+      run: |
+        $pass = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 12 | ForEach-Object {[char]$_})
+        net user runneradmin $pass
+        echo "PASSWORD=$pass" >> $env:GITHUB_ENV
+
+    - name: Enable RDP
+      run: |
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
+
+    - name: Install Firefox
+      run: choco install firefox -y
+
+    - name: Set Dark Mode
+      run: |
+        reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v AppsUseLightTheme /t REG_DWORD /d 0 /f
+        reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
+
+    - name: Apply Custom Wallpaper
+      run: |
+        $source = "$env:GITHUB_WORKSPACE\ikadvds.png"
+        $dest = "$env:USERPROFILE\ikadvds.png"
+
+        if (Test-Path $source) {
+            Copy-Item $source $dest -Force
+            reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $dest /f
+            RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
+            Write-Host "Wallpaper applied."
+        } else {
+            Write-Host "Wallpaper file not found!"
+        }
+
+    - name: Install Tailscale
+      run: choco install tailscale -y
+
+    - name: Start Tailscale (URL Login)
+      run: |
+        Write-Host "Starting Tailscale..."
+        tailscale up
+
+    - name: Wait & Show RDP Info
+      run: |
+        Write-Host "Authorize device using URL above."
+        Write-Host "Waiting for Tailscale IP..."
+
+        for ($i=0; $i -lt 60; $i++) {
+          $ip = tailscale ip -4 2>$null
+          if ($ip) { break }
+          Start-Sleep -Seconds 5
+        }
+
+        $ip = tailscale ip -4
+
+        Write-Host "==========================="
+        Write-Host "RDP IP: $ip"
+        Write-Host "Username: runneradmin"
+        Write-Host "Password: $env:PASSWORD"
+        Write-Host "==========================="
+
+        Start-Sleep -Seconds 21600
