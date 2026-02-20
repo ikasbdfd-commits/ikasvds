@@ -26,19 +26,24 @@ jobs:
         Write-Output "RDP PASSWORD: $password"
         Write-Output "======================================"
 
-    - name: Download JPRQ (Official Windows Release)
+    - name: Download JPRQ (Stable Method)
       shell: powershell
       run: |
-        Invoke-WebRequest https://github.com/azimjohn/jprq/releases/latest/download/jprq_windows_amd64.exe -OutFile jprq.exe
+        $url = "https://github.com/azimjohn/jprq/releases/latest/download/jprq_windows_amd64.exe"
+        for ($i=1; $i -le 3; $i++) {
+          Write-Output "Download attempt $i..."
+          curl.exe -L $url -o jprq.exe
+          if (Test-Path .\jprq.exe) {
+            Write-Output "Download successful."
+            break
+          }
+          Start-Sleep -Seconds 5
+        }
 
-    - name: Verify Download
-      shell: powershell
-      run: |
         if (!(Test-Path .\jprq.exe)) {
-          Write-Error "JPRQ not downloaded!"
+          Write-Error "JPRQ download failed after 3 attempts."
           exit 1
         }
-        Get-Item .\jprq.exe
 
     - name: Authenticate JPRQ
       shell: powershell
