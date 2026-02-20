@@ -21,15 +21,24 @@ jobs:
       run: |
         $password = -join ((33..126) | Get-Random -Count 24 | ForEach-Object {[char]$_})
         net user runneradmin $password
-        Write-Output "==============================="
+        Write-Output "======================================"
         Write-Output "RDP USER: runneradmin"
         Write-Output "RDP PASSWORD: $password"
-        Write-Output "==============================="
+        Write-Output "======================================"
 
-    - name: Download JPRQ
+    - name: Download JPRQ (Official Windows Release)
       shell: powershell
       run: |
-        Invoke-WebRequest https://jprq.io/downloads/jprq-windows-amd64.exe -OutFile jprq.exe
+        Invoke-WebRequest https://github.com/azimjohn/jprq/releases/latest/download/jprq_windows_amd64.exe -OutFile jprq.exe
+
+    - name: Verify Download
+      shell: powershell
+      run: |
+        if (!(Test-Path .\jprq.exe)) {
+          Write-Error "JPRQ not downloaded!"
+          exit 1
+        }
+        Get-Item .\jprq.exe
 
     - name: Authenticate JPRQ
       shell: powershell
@@ -38,7 +47,8 @@ jobs:
       run: |
         .\jprq.exe auth $env:JPRQ_TOKEN
 
-    - name: Start TCP Tunnel (Keeps Job Alive)
+    - name: Start TCP Tunnel (Keeps Job Alive 6h)
       shell: powershell
       run: |
+        Write-Output "Starting TCP tunnel on port 3389..."
         .\jprq.exe tcp 3389
