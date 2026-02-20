@@ -10,44 +10,32 @@ jobs:
 
     steps:
 
-    - name: Enable RDP in Registry & Firewall
+    - name: Enable RDP
       shell: powershell
       run: |
-        Write-Output "Enabling RDP..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
-            -Name "fDenyTSConnections" -Value 0
+          -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Download and Install Tailscale
+    - name: Download & Install Tailscale
       shell: powershell
       run: |
-        $url = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
-        Write-Output "Downloading Tailscale..."
-        curl.exe -L -o tailscale-setup.exe $url
-        Start-Process -Wait -FilePath .\tailscale-setup.exe -ArgumentList "/quiet"
+        curl.exe -L -o tailscale.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
+        Start-Process -Wait -FilePath .\tailscale.exe -ArgumentList "/quiet"
 
-    - name: Start Tailscale Service
-      shell: powershell
-      run: |
-        Write-Output "Starting Tailscale..."
-        tailscaled &
-
-    - name: Authenticate to Tailscale
+    - name: Authenticate Tailscale
       shell: powershell
       env:
         TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
       run: |
-        Write-Output "Authenticating to Tailscale..."
         tailscale up --authkey=$env:TAILSCALE_AUTHKEY --accept-routes
 
-    - name: Show Tailscale Status
+    - name: Show Tailscale IP
       shell: powershell
       run: |
-        Write-Output "Tailscale status:"
-        tailscale status
+        tailscale ip -4
 
-    - name: Keep Alive (Block)
+    - name: Keep Alive
       shell: powershell
       run: |
-        Write-Output "Tailscale RDP tunnel running..."
         while ($true) { Start-Sleep -Seconds 300 }
