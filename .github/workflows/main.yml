@@ -1,4 +1,4 @@
-name: Windows RDP Ngrok İkasVDS
+name: Windows RDP JPRQ
 
 on:
   workflow_dispatch:
@@ -10,54 +10,35 @@ jobs:
 
     steps:
 
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-
-    - name: Set Random Password
-      run: |
-        $pass = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 12 | ForEach-Object {[char]$_})
-        net user runneradmin $pass
-        echo "PASSWORD=$pass" >> $env:GITHUB_ENV
-
     - name: Enable RDP
+      shell: powershell
       run: |
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Set Dark Mode
+    - name: Generate Strong Password
+      shell: powershell
       run: |
-        reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v AppsUseLightTheme /t REG_DWORD /d 0 /f
-        reg add HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize /v SystemUsesLightTheme /t REG_DWORD /d 0 /f
+        $password = -join ((33..126) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+        net user runneradmin $password
+        Write-Output "==============================="
+        Write-Output "RDP USER: runneradmin"
+        Write-Output "RDP PASSWORD: $password"
+        Write-Output "==============================="
 
-    - name: Apply Wallpaper
+    - name: Download JPRQ
+      shell: powershell
       run: |
-        $source = "$env:GITHUB_WORKSPACE\ikadvds.png"
-        $dest = "$env:USERPROFILE\ikadvds.png"
-        if (Test-Path $source) {
-            Copy-Item $source $dest -Force
-            reg add "HKCU\Control Panel\Desktop" /v Wallpaper /t REG_SZ /d $dest /f
-            RUNDLL32.EXE user32.dll,UpdatePerUserSystemParameters
-        }
+        Invoke-WebRequest https://jprq.io/downloads/jprq-windows-amd64.exe -OutFile jprq.exe
 
-    - name: Install Ngrok
-      run: choco install ngrok -y
-
-    - name: Configure Ngrok
-      run: ngrok config add-authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
-
-    - name: Start Ngrok and Print Address
+    - name: Authenticate JPRQ
+      shell: powershell
+      env:
+        JPRQ_TOKEN: ${{ secrets.JPRQ_TOKEN }}
       run: |
-        Start-Process cmd -ArgumentList "/c ngrok tcp 3389" -WindowStyle Hidden
-        Start-Sleep -Seconds 15
+        .\jprq.exe auth $env:JPRQ_TOKEN
 
-        $resp = Invoke-RestMethod "http://127.0.0.1:4040/api/tunnels"
-        $tcp = $resp.tunnels | Where-Object { $_.proto -eq "tcp" }
-        $publicUrl = $tcp.public_url -replace "tcp://", ""
-
-        Write-Host "=================================="
-        Write-Host "RDP Address: $publicUrl"
-        Write-Host "Username: runneradmin"
-        Write-Host "Password: $env:PASSWORD"
-        Write-Host "=================================="
-
-        Start-Sleep -Seconds 21600
+    - name: Start TCP Tunnel (Keeps Job Alive)
+      shell: powershell
+      run: |
+        .\jprq.exe tcp 3389
