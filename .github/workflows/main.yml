@@ -1,4 +1,4 @@
-name: Windows RDP JPRQ
+name: Windows RDP Pinggy
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
 jobs:
   rdp:
     runs-on: windows-latest
-    timeout-minutes: 360
+    timeout-minutes: 60
 
     steps:
 
@@ -21,39 +21,12 @@ jobs:
       run: |
         $password = -join ((33..126) | Get-Random -Count 24 | ForEach-Object {[char]$_})
         net user runneradmin $password
-        Write-Output "======================================"
+        Write-Output "================================="
         Write-Output "RDP USER: runneradmin"
         Write-Output "RDP PASSWORD: $password"
-        Write-Output "======================================"
+        Write-Output "================================="
 
-    - name: Download JPRQ (Stable Method)
+    - name: Start Pinggy TCP Tunnel
       shell: powershell
       run: |
-        $url = "https://github.com/azimjohn/jprq/releases/latest/download/jprq_windows_amd64.exe"
-        for ($i=1; $i -le 3; $i++) {
-          Write-Output "Download attempt $i..."
-          curl.exe -L $url -o jprq.exe
-          if (Test-Path .\jprq.exe) {
-            Write-Output "Download successful."
-            break
-          }
-          Start-Sleep -Seconds 5
-        }
-
-        if (!(Test-Path .\jprq.exe)) {
-          Write-Error "JPRQ download failed after 3 attempts."
-          exit 1
-        }
-
-    - name: Authenticate JPRQ
-      shell: powershell
-      env:
-        JPRQ_TOKEN: ${{ secrets.JPRQ_TOKEN }}
-      run: |
-        .\jprq.exe auth $env:JPRQ_TOKEN
-
-    - name: Start TCP Tunnel (Keeps Job Alive 6h)
-      shell: powershell
-      run: |
-        Write-Output "Starting TCP tunnel on port 3389..."
-        .\jprq.exe tcp 3389
+        ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:3389 qr@free.pinggy.io
