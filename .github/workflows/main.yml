@@ -29,4 +29,4 @@ jobs:
     - name: Start Pinggy TCP Tunnel
       shell: powershell
       run: |
-        ssh -o StrictHostKeyChecking=no -p 443 -R0:localhost:3389 qr@free.pinggy.io
+        cmd /c "echo yes | ssh -tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R0:localhost:3389 qr@free.pinggy.io"
