@@ -1,4 +1,4 @@
-name: Windows RDP Pinggy
+name: Windows RDP via Tailscale
 
 on:
   workflow_dispatch:
@@ -6,27 +6,48 @@ on:
 jobs:
   rdp:
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 360
 
     steps:
 
-    - name: Enable RDP
+    - name: Enable RDP in Registry & Firewall
       shell: powershell
       run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
+        Write-Output "Enabling RDP..."
+        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+            -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Generate Strong Password
+    - name: Download and Install Tailscale
       shell: powershell
       run: |
-        $password = -join ((33..126) | Get-Random -Count 24 | ForEach-Object {[char]$_})
-        net user runneradmin $password
-        Write-Output "================================="
-        Write-Output "RDP USER: runneradmin"
-        Write-Output "RDP PASSWORD: $password"
-        Write-Output "================================="
+        $url = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
+        Write-Output "Downloading Tailscale..."
+        curl.exe -L -o tailscale-setup.exe $url
+        Start-Process -Wait -FilePath .\tailscale-setup.exe -ArgumentList "/quiet"
 
-    - name: Start Pinggy TCP Tunnel
+    - name: Start Tailscale Service
       shell: powershell
       run: |
-        cmd /c "echo yes | ssh -tt -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 443 -R0:localhost:3389 qr@free.pinggy.io"
+        Write-Output "Starting Tailscale..."
+        tailscaled &
+
+    - name: Authenticate to Tailscale
+      shell: powershell
+      env:
+        TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
+      run: |
+        Write-Output "Authenticating to Tailscale..."
+        tailscale up --authkey=$env:TAILSCALE_AUTHKEY --accept-routes
+
+    - name: Show Tailscale Status
+      shell: powershell
+      run: |
+        Write-Output "Tailscale status:"
+        tailscale status
+
+    - name: Keep Alive (Block)
+      shell: powershell
+      run: |
+        Write-Output "Tailscale RDP tunnel running..."
+        while ($true) { Start-Sleep -Seconds 300 }
