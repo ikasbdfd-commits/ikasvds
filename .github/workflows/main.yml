@@ -10,32 +10,65 @@ jobs:
 
     steps:
 
+    # 1️⃣ Enable RDP
     - name: Enable RDP
       shell: powershell
       run: |
+        Write-Output "Enabling RDP..."
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
           -Name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
 
-    - name: Download & Install Tailscale
+    # 2️⃣ Generate Strong Password
+    - name: Generate Strong Password
       shell: powershell
       run: |
-        curl.exe -L -o tailscale.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
-        Start-Process -Wait -FilePath .\tailscale.exe -ArgumentList "/quiet"
+        $password = -join ((33..126) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+        net user runneradmin $password
+        Write-Output "======================================"
+        Write-Output "RDP USER: runneradmin"
+        Write-Output "RDP PASSWORD: $password"
+        Write-Output "======================================"
 
-    - name: Authenticate Tailscale
+    # 3️⃣ Download & Install Tailscale
+    - name: Install Tailscale
+      shell: powershell
+      run: |
+        Write-Output "Downloading Tailscale..."
+        curl.exe -L -o tailscale.exe https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe
+        Write-Output "Installing..."
+        Start-Process -Wait -FilePath .\tailscale.exe -ArgumentList "/quiet"
+        Start-Sleep -Seconds 5
+
+    # 4️⃣ Start Service
+    - name: Start Tailscale Service
+      shell: powershell
+      run: |
+        Write-Output "Starting Tailscale service..."
+        Start-Service Tailscale
+        Get-Service Tailscale
+
+    # 5️⃣ Authenticate
+    - name: Authenticate to Tailscale
       shell: powershell
       env:
         TAILSCALE_AUTHKEY: ${{ secrets.TAILSCALE_AUTHKEY }}
       run: |
-        tailscale up --authkey=$env:TAILSCALE_AUTHKEY --accept-routes
+        $ts = "C:\Program Files\Tailscale\tailscale.exe"
+        Write-Output "Authenticating..."
+        & $ts up --authkey=$env:TAILSCALE_AUTHKEY --accept-routes
 
+    # 6️⃣ Show IP
     - name: Show Tailscale IP
       shell: powershell
       run: |
-        tailscale ip -4
+        $ts = "C:\Program Files\Tailscale\tailscale.exe"
+        Write-Output "Tailscale IPv4:"
+        & $ts ip -4
 
-    - name: Keep Alive
+    # 7️⃣ Keep Alive
+    - name: Keep Runner Alive
       shell: powershell
       run: |
+        Write-Output "RDP is ready via Tailscale."
         while ($true) { Start-Sleep -Seconds 300 }
